@@ -115,15 +115,18 @@ export function DriveSearch({ label, prefix }: { label: string; prefix: string }
   }, [index, searchText, history, root]);
 
   if (!root) {
+    // Box / Google Drive の片方だけ使う人もいるので、使わないコマンドの無効化へ誘導する
+    const { driveRoot } = getPreferenceValues<{ driveRoot?: string }>();
+    const where = driveRoot ? `設定で指定したフォルダ ${driveRoot} がありません。` : `${CLOUD_STORAGE} に ${prefix}* がありません。`;
     return (
       <List>
         <List.EmptyView
           icon={Icon.ExclamationMark}
           title={`${label} のマウントが見つかりません`}
-          description={`${CLOUD_STORAGE} に ${prefix}* がありません。拡張機能の設定でマウント先を指定することもできます`}
+          description={`${where}\n${label} を使っていない場合は、設定からこのコマンドを無効にできます`}
           actions={
             <ActionPanel>
-              <Action title="Open Extension Preferences" icon={Icon.Gear} onAction={openCommandPreferences} />
+              <Action title="Open Command Preferences" icon={Icon.Gear} onAction={openCommandPreferences} />
             </ActionPanel>
           }
         />
