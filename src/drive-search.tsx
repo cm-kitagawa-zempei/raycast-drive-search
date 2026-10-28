@@ -1,14 +1,24 @@
-import { Action, ActionPanel, environment, getPreferenceValues, Icon, List, openCommandPreferences } from "@raycast/api";
+import {
+  Action,
+  ActionPanel,
+  environment,
+  getPreferenceValues,
+  Icon,
+  List,
+  open,
+  openCommandPreferences,
+} from "@raycast/api";
 import { showFailureToast, useLocalStorage } from "@raycast/utils";
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { useEffect, useMemo, useState } from "react";
 import { bump, frecency, History } from "./frecency";
 import { matchTerms, parseQuery, Target } from "./fuzzy";
 import { buildIndex, DriveIndex, relAt } from "./index-store";
+import { WebUrlResolver } from "./web-url";
 
 const CLOUD_STORAGE = join(homedir(), "Library", "CloudStorage");
 const MAX_RESULTS = 100;
@@ -76,7 +86,7 @@ function useDriveIndex(root: string | undefined) {
   return { index, isLoading, reload: () => setNonce((n) => n + 1) };
 }
 
-export function DriveSearch({ label, prefix }: { label: string; prefix: string }) {
+export function DriveSearch({ label, prefix, webUrl }: { label: string; prefix: string; webUrl: WebUrlResolver }) {
   const root = useMemo(() => findDriveRoot(prefix), [prefix]);
   const [searchText, setSearchText] = useState("");
   const { index, isLoading, reload } = useDriveIndex(root);
@@ -135,6 +145,15 @@ export function DriveSearch({ label, prefix }: { label: string; prefix: string }
   }
 
   const record = (rel: string) => setHistory(bump(history ?? {}, rel));
+  // フォルダを開くときも、履歴には選んだファイルを記録する
+  const openWeb = async (path: string, rel: string, recordRel = rel) => {
+    try {
+      await open(await webUrl(path, rel));
+      record(recordRel);
+    } catch (e) {
+      await showFailureToast(e, { title: "Web 版を開けませんでした" });
+    }
+  };
   const reloadAction = (
     <Action
       title="Reload Index"
@@ -171,8 +190,27 @@ export function DriveSearch({ label, prefix }: { label: string; prefix: string }
               accessories={history?.[rel] ? [{ icon: Icon.Clock, tooltip: "最近使ったファイル" }] : []}
               actions={
                 <ActionPanel>
-                  <Action.Open title="Open" target={path} onOpen={() => record(rel)} />
-                  <Action.ShowInFinder path={path} onShow={() => record(rel)} />
+                  <Action
+                    title={`Open in ${label} Web`}
+                    icon={Icon.Globe}
+                    onAction={() => openWeb(path, rel)}
+                  />
+                  <Action
+                    title={`Open Folder in ${label} Web`}
+                    icon={Icon.Folder}
+                    onAction={() => openWeb(dirname(path), dir, rel)}
+                  />
+                  <Action.Open
+                    title="Open Local File"
+                    target={path}
+                    shortcut={{ modifiers: ["opt"], key: "return" }}
+                    onOpen={() => record(rel)}
+                  />
+                  <Action.ShowInFinder
+                    path={path}
+                    shortcut={{ modifiers: ["cmd", "shift"], key: "f" }}
+                    onShow={() => record(rel)}
+                  />
                   <Action.CopyToClipboard
                     title="Copy Path"
                     content={path}
