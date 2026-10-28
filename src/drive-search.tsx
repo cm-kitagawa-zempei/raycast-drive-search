@@ -2,6 +2,8 @@ import {
   Action,
   ActionPanel,
   environment,
+  getApplications,
+  getFrontmostApplication,
   getPreferenceValues,
   Icon,
   List,
@@ -35,6 +37,13 @@ function findDriveRoot(prefix: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+// Raycast を呼び出す直前に前面にあったアプリがブラウザならそれで開き、そうでなければデフォルトのブラウザで開く
+async function openInBrowser(url: string) {
+  const [front, apps] = await Promise.all([getFrontmostApplication().catch(() => undefined), getApplications(url)]);
+  const browser = front && apps.find((a) => a.path === front.path);
+  await open(url, browser);
 }
 
 // File Provider のマウントを直接走査すると遅いので、Spotlight のインデックスから一覧を取る。
@@ -148,7 +157,7 @@ export function DriveSearch({ label, prefix, webUrl }: { label: string; prefix: 
   // フォルダを開くときも、履歴には選んだファイルを記録する
   const openWeb = async (path: string, rel: string, recordRel = rel) => {
     try {
-      await open(await webUrl(path, rel));
+      await openInBrowser(await webUrl(path, rel));
       record(recordRel);
     } catch (e) {
       await showFailureToast(e, { title: "Web 版を開けませんでした" });
